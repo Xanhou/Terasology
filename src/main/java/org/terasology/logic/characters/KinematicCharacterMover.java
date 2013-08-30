@@ -64,6 +64,9 @@ public class KinematicCharacterMover implements CharacterMover {
      * The amount of extra distance added to horizontal movement to allow for penentration.
      */
     private static final float HORIZONTAL_PENETRATION_LEEWAY = 0.04f;
+    /**
+     * Players are not allowed to fall faster than this distance per second:
+     */
     public static final float TERMINAL_VELOCITY = 64.0f;
     public static final float UNDERWATER_GRAVITY = 0.25f;
     public static final float UNDERWATER_INERTIA = 2.0f;
@@ -192,31 +195,22 @@ public class KinematicCharacterMover implements CharacterMover {
 
     private void climb(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
             CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f desiredVelocity = new Vector3f(input.getMovementDirection());
-        float lengthSquared = desiredVelocity.lengthSquared();
-        if (lengthSquared > 1) {
-            desiredVelocity.normalize();
-        }
-        float maxSpeed = movementComp.maxClimbSpeed;
-        if (input.isRunning()) {
-            maxSpeed *= movementComp.runFactor;
-        }
-        desiredVelocity.scale(maxSpeed);
-        desiredVelocity.y -= CLIMB_GRAVITY;
-        Vector3f velocityDiff = new Vector3f(desiredVelocity);
-        velocityDiff.sub(state.getVelocity());
-        velocityDiff.scale(Math.min(movementComp.groundFriction * input.getDelta(), 1.0f));
-        Vector3f endVelocity = new Vector3f(state.getVelocity());
-        endVelocity.x += velocityDiff.x;
-        endVelocity.y += velocityDiff.y;
-        endVelocity.z += velocityDiff.z;
+        Vector3f initialVelocity = new Vector3f(state.getVelocity());
+        setVelocity(movementComp, state, input, entity);
+        Vector3f endVelocity = state.getVelocity();
+        
+        Vector3f position = state.getPosition();
         Vector3f moveDelta = new Vector3f(endVelocity);
         moveDelta.scale(input.getDelta());
+        float stepHeight = 0;
+        float slopeFactor = movementComp.slopeFactor;
         CharacterCollider collider = physics.getCharacterCollider(entity);
-        MoveResult moveResult = move(state.getPosition(), moveDelta, 0, movementComp.slopeFactor, collider);
+        
+        MoveResult moveResult = move(position, moveDelta, stepHeight, slopeFactor, collider);
         Vector3f distanceMoved = new Vector3f(moveResult.getFinalPosition());
         distanceMoved.sub(state.getPosition());
         state.getPosition().set(moveResult.getFinalPosition());
+        
         if (input.isFirstRun() && distanceMoved.length() > 0) {
             entity.send(new MovedEvent(distanceMoved, state.getPosition()));
         }
@@ -224,8 +218,8 @@ public class KinematicCharacterMover implements CharacterMover {
         if (moveResult.isBottomHit()) {
             if (!state.isGrounded()) {
                 if (input.isFirstRun()) {
-                    Vector3f landVelocity = new Vector3f(state.getVelocity());
-                    landVelocity.y += (distanceMoved.y / moveDelta.y) * (endVelocity.y - state.getVelocity().y);
+                    Vector3f landVelocity = new Vector3f(initialVelocity);
+                    landVelocity.y += (distanceMoved.y / moveDelta.y) * (endVelocity.y - initialVelocity.y);
                     entity.send(new VerticalCollisionEvent(state.getPosition(), landVelocity));
                 }
                 state.setGrounded(true);
@@ -237,7 +231,9 @@ public class KinematicCharacterMover implements CharacterMover {
             }
             state.setGrounded(false);
         }
+        //
         state.getVelocity().set(endVelocity);
+        //
         if (input.isFirstRun() && moveResult.isHorizontalHit()) {
             entity.send(new HorizontalCollisionEvent(state.getPosition(), state.getVelocity()));
         }
@@ -275,21 +271,7 @@ public class KinematicCharacterMover implements CharacterMover {
 
     private void ghost(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
             CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f desiredVelocity = new Vector3f(input.getMovementDirection());
-        float lengthSquared = desiredVelocity.lengthSquared();
-        if (lengthSquared > 1) {
-            desiredVelocity.normalize();
-        }
-        float maxSpeed = movementComp.maxGhostSpeed;
-        if (input.isRunning()) {
-            maxSpeed *= movementComp.runFactor;
-        }
-        desiredVelocity.scale(maxSpeed);
-        // Modify velocity towards desired, up to the maximum rate determined by friction
-        Vector3f velocityDiff = new Vector3f(desiredVelocity);
-        velocityDiff.sub(state.getVelocity());
-        velocityDiff.scale(Math.min(GHOST_INERTIA * input.getDelta(), 1.0f));
-        state.getVelocity().add(velocityDiff);
+        setVelocity(movementComp, state, input, entity);
         // No collision, so just do the move
         Vector3f deltaPos = new Vector3f(state.getVelocity());
         deltaPos.scale(input.getDelta());
@@ -512,37 +494,21 @@ public class KinematicCharacterMover implements CharacterMover {
 
     private void swim(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
             CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f desiredVelocity = new Vector3f(input.getMovementDirection());
-        float lengthSquared = desiredVelocity.lengthSquared();
-        if (lengthSquared > 1) {
-            desiredVelocity.normalize();
-        }
-        float maxSpeed = movementComp.maxWaterSpeed;
-        if (input.isRunning()) {
-            maxSpeed *= movementComp.runFactor;
-        }
-        desiredVelocity.scale(maxSpeed);
-        desiredVelocity.y -= UNDERWATER_GRAVITY;
-        // Modify velocity towards desired, up to the maximum rate determined by friction
-        Vector3f velocityDiff = new Vector3f(desiredVelocity);
-        velocityDiff.sub(state.getVelocity());
-        velocityDiff.scale(Math.min(UNDERWATER_INERTIA * input.getDelta(), 1.0f));
-        state.getVelocity().x += velocityDiff.x;
-        state.getVelocity().y += velocityDiff.y;
-        state.getVelocity().z += velocityDiff.z;
-        // Slow down due to friction
-        float speed = state.getVelocity().length();
-        if (speed > movementComp.maxWaterSpeed) {
-            state.getVelocity().scale((speed - 4 * (speed - movementComp.maxWaterSpeed) * input.getDelta()) / speed);
-        }
+        setVelocity(movementComp, state, input, entity);
+        
+        Vector3f position = state.getPosition();
         Vector3f moveDelta = new Vector3f(state.getVelocity());
         moveDelta.scale(input.getDelta());
+        float stepHeight = 0;
+        float slopeFactor = 0.1f;
         CharacterCollider collider = physics.getCharacterCollider(entity);
-        // Note: No stepping underwater, no issue with slopes
-        MoveResult moveResult = move(state.getPosition(), moveDelta, 0, 0.1f, collider);
+        
+        MoveResult moveResult;
+        moveResult = move(position, moveDelta, stepHeight, slopeFactor, collider);
         Vector3f distanceMoved = new Vector3f(moveResult.getFinalPosition());
         distanceMoved.sub(state.getPosition());
         state.getPosition().set(moveResult.getFinalPosition());
+        
         if (input.isFirstRun() && distanceMoved.length() > 0) {
             entity.send(new MovedEvent(distanceMoved, state.getPosition()));
             state.setFootstepDelta(
@@ -591,39 +557,18 @@ public class KinematicCharacterMover implements CharacterMover {
 
     private void walk(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
             CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f desiredVelocity = new Vector3f(input.getMovementDirection());
-        float lengthSquared = desiredVelocity.lengthSquared();
-        //If the movement direction length is smaller than 1, so will be the movement speed?? huh? Shouldnt this be lengthSquared != 0
-        if (lengthSquared > 1) {
-            desiredVelocity.normalize();
-        }
-        float maxSpeed = movementComp.maxGroundSpeed;
-        if (input.isRunning()) {
-            maxSpeed *= movementComp.runFactor;
-        }
-        // As we can't use it, remove the y component of desired movement while maintaining speed.
-        if (desiredVelocity.y != 0) {
-            float speed = desiredVelocity.length();
-            desiredVelocity.y = 0;
-            if (desiredVelocity.x != 0 || desiredVelocity.z != 0) {
-                desiredVelocity.normalize();
-                desiredVelocity.scale(speed);
-            }
-        }
-        desiredVelocity.scale(maxSpeed);
-        // Modify velocity towards desired, up to the maximum rate determined by friction
-        Vector3f velocityDiff = new Vector3f(desiredVelocity);
-        velocityDiff.sub(state.getVelocity());
-        velocityDiff.scale(Math.min(movementComp.groundFriction * input.getDelta(), 1.0f));
-        Vector3f endVelocity = new Vector3f(state.getVelocity());
-        endVelocity.x += velocityDiff.x;
-        endVelocity.z += velocityDiff.z;
-        endVelocity.y = Math.max(-TERMINAL_VELOCITY, state.getVelocity().y - GRAVITY * input.getDelta());
+        
+        setVelocity(movementComp, state, input, entity);
+        Vector3f endVelocity = state.getVelocity();
+        
+        Vector3f position = state.getPosition();
         Vector3f moveDelta = new Vector3f(endVelocity);
         moveDelta.scale(input.getDelta());
+        float stepHeight = (state.isGrounded()) ? movementComp.stepHeight : 0;
+        float slopeFactor = movementComp.slopeFactor;
         CharacterCollider collider = physics.getCharacterCollider(entity);
-        MoveResult moveResult = move(state.getPosition(), moveDelta, (state.isGrounded()) ? movementComp.stepHeight : 0,
-                movementComp.slopeFactor, collider);
+        
+        MoveResult moveResult = move(position, moveDelta,  stepHeight, slopeFactor, collider);
         Vector3f distanceMoved = new Vector3f(moveResult.getFinalPosition());
         distanceMoved.sub(state.getPosition());
         state.getPosition().set(moveResult.getFinalPosition());
@@ -669,6 +614,104 @@ public class KinematicCharacterMover implements CharacterMover {
                     entity.send(new FootstepEvent());
                 }
             }
+        }
+    }
+    
+    /**
+     * Determines the new velocity and sets it with state.getVelocity().set(...)
+     * @param movementComp
+     * @param state
+     * @param input
+     * @param entity 
+     */
+    private void setVelocity(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
+            CharacterMoveInputEvent input, EntityRef entity) {
+        
+        Vector3f desiredVelocity = new Vector3f(input.getMovementDirection());
+        
+        float lengthSquared = desiredVelocity.lengthSquared();
+        //Allow smaller velocity for analog inputs, not bigger velocity:
+        if (lengthSquared > 1) {
+            desiredVelocity.normalize();
+        }
+        
+        float maxSpeed = movementComp.getMaxSpeed(state.getMode());
+        
+        if (input.isRunning()) {
+            maxSpeed *= movementComp.runFactor;
+        }
+        
+        if(state.getMode() == MovementMode.WALKING) {
+            // As we can't use it, remove the y component of desired movement while maintaining speed.
+            if (desiredVelocity.y != 0) {
+                float speed = desiredVelocity.length();
+                desiredVelocity.y = 0;
+                if (desiredVelocity.x != 0 || desiredVelocity.z != 0) {
+                    desiredVelocity.normalize();
+                    desiredVelocity.scale(speed);
+                }
+            }
+        }
+        
+        desiredVelocity.scale(maxSpeed);
+        desiredVelocity.y -= getGravity(state.getMode());
+        
+        // Modify velocity towards desired, up to the maximum rate determined by friction
+        Vector3f velocityDiff = new Vector3f(desiredVelocity);
+        velocityDiff.sub(state.getVelocity());
+        float inertia = getInertia(state.getMode(), movementComp);
+        velocityDiff.scale(Math.min(inertia * input.getDelta(), 1.0f));
+        Vector3f endVelocity = new Vector3f(state.getVelocity());
+        endVelocity.add(velocityDiff);
+        
+        //Determine special adjustments:
+        switch (state.getMode()) {
+            case SWIMMING:
+                // Slow down due to friction
+                float speed = endVelocity.length();
+                if (speed > maxSpeed) {
+                    endVelocity.scale((speed - 4 * (speed - movementComp.getMaxSpeed(state.getMode())) * input.getDelta()) / speed);
+                }
+                break;
+            case WALKING:
+                endVelocity.y = Math.max(-TERMINAL_VELOCITY, state.getVelocity().y - GRAVITY * input.getDelta());
+                break;
+            default:
+                //No special adjustments for other modes
+                break;
+        }
+        
+        //Lets not forget to actually set the velocity:
+        state.getVelocity().set(endVelocity);
+    }
+    
+    private float getGravity(MovementMode mode) {
+        switch (mode) {
+            case GHOSTING:
+                return 0f;
+            case SWIMMING:
+                return UNDERWATER_GRAVITY;
+            case WALKING:
+                return GRAVITY;
+            case CLIMBING:
+                return CLIMB_GRAVITY;
+            default:
+                return GRAVITY;
+        }
+    }
+
+    private float getInertia(MovementMode mode, CharacterMovementComponent movementComp) {
+        switch (mode) {
+            case GHOSTING:
+                return GHOST_INERTIA;
+            case SWIMMING:
+                return UNDERWATER_INERTIA;
+            case WALKING:
+                return movementComp.groundFriction;
+            case CLIMBING:
+                return movementComp.groundFriction;
+            default:
+                return GRAVITY;
         }
     }
 

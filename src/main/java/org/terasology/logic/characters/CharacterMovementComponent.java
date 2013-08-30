@@ -85,4 +85,24 @@ public final class CharacterMovementComponent implements Component {
         velocity.set(newVelocity);
     }
 
+    /**
+     * Returns the maximum speed for the given movement mode.
+     * @param mode The mode to get the max speed of.
+     * @return The max speed for the entity of this movement component when in the given mode.
+     */
+    float getMaxSpeed(MovementMode mode) {
+        switch (mode) {
+            case GHOSTING:
+                return maxGhostSpeed;
+            case SWIMMING:
+                return maxWaterSpeed;
+            case WALKING:
+                return maxGroundSpeed;
+            case CLIMBING:
+                return maxClimbSpeed;
+            default:
+                return maxGroundSpeed;
+        }
+    }
+
 }
