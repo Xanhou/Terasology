@@ -28,6 +28,7 @@ import javax.vecmath.Vector3f;
  */
 @ServerEvent
 public class CharacterMoveInputEvent extends NetworkEvent {
+    //Delta is stored in milliseconds
     private long delta;
     private float pitch;
     private float yaw;
@@ -64,7 +65,11 @@ public class CharacterMoveInputEvent extends NetworkEvent {
     public long getDeltaMs() {
         return delta;
     }
-
+    
+    /**
+     * Returns the time delta for this event in seconds.
+     * @return 
+     */
     public float getDelta() {
         return delta / 1000f;
     }

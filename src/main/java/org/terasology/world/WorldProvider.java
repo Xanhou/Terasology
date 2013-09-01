@@ -36,6 +36,11 @@ public interface WorldProvider extends WorldProviderCore {
      */
     boolean isBlockRelevant(Vector3i pos);
 
+    /**
+     * Similar to its overloaded version, but this version determines the block based on a floating point location in the world.
+     * @param pos
+     * @return Whether the given block is active
+     */
     boolean isBlockRelevant(Vector3f pos);
 
     /**

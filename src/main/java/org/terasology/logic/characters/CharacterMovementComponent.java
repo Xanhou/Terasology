@@ -90,7 +90,7 @@ public final class CharacterMovementComponent implements Component {
      * @param mode The mode to get the max speed of.
      * @return The max speed for the entity of this movement component when in the given mode.
      */
-    float getMaxSpeed(MovementMode mode) {
+    public float getMaxSpeed() {
         switch (mode) {
             case GHOSTING:
                 return maxGhostSpeed;
@@ -104,5 +104,35 @@ public final class CharacterMovementComponent implements Component {
                 return maxGroundSpeed;
         }
     }
+    
+    public float getStepHeight(boolean isGrounded) {
+        switch (mode) {
+            case GHOSTING:
+                return 0f;
+            case SWIMMING:
+                return 0f;
+            case WALKING:
+                return isGrounded ? stepHeight : 0;
+            case CLIMBING:
+                return 0f;
+            default:
+                return stepHeight;
+        }
+    }
 
+    public float getSlopeFactor() {
+        switch (mode) {
+            case GHOSTING:
+                return 0f;
+            case SWIMMING:
+                //TODO: make this a field instead of magic number
+                return 0.1f;
+            case WALKING:
+                return slopeFactor;
+            case CLIMBING:
+                return slopeFactor;
+            default:
+                return slopeFactor;
+        }
+    }
 }
