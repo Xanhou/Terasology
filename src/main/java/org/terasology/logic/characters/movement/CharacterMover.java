@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package org.terasology.logic.characters;
+package org.terasology.logic.characters.movement;
 
 import org.terasology.entitySystem.EntityRef;
+import org.terasology.logic.characters.CharacterMoveInputEvent;
+import org.terasology.logic.characters.CharacterStateEvent;
 import org.terasology.logic.characters.events.VerticalCollisionEvent;
 
 /**

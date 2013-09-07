@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.terasology.logic.characters;
+package org.terasology.logic.characters.movement;
 
 /**
  * @author Immortius

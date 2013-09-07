@@ -78,7 +78,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.terasology.logic.characters.CharacterMovementComponent;
+import org.terasology.logic.characters.movement.CharacterMovementComponent;
 import org.terasology.logic.location.LocationComponent;
 import org.terasology.physics.CharacterCollider;
 import org.terasology.physics.CollisionGroup;

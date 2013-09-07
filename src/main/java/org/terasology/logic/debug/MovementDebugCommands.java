@@ -18,7 +18,7 @@ package org.terasology.logic.debug;
 import org.terasology.entitySystem.EntityRef;
 import org.terasology.entitySystem.systems.ComponentSystem;
 import org.terasology.entitySystem.systems.RegisterSystem;
-import org.terasology.logic.characters.CharacterMovementComponent;
+import org.terasology.logic.characters.movement.CharacterMovementComponent;
 import org.terasology.logic.characters.events.ToggleNoClipEvent;
 import org.terasology.logic.console.Command;
 import org.terasology.logic.console.CommandParam;

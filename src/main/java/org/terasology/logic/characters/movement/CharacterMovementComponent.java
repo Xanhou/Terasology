@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.logic.characters;
+package org.terasology.logic.characters.movement;
 
 import com.bulletphysics.collision.dispatch.PairCachingGhostObject;
 import com.google.common.collect.Lists;

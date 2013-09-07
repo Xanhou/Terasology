@@ -16,6 +16,10 @@
 
 package org.terasology.logic.characters;
 
+import org.terasology.logic.characters.movement.CharacterMovementComponent;
+import org.terasology.logic.characters.movement.KinematicCharacterMover;
+import org.terasology.logic.characters.movement.CharacterMover;
+import org.terasology.logic.characters.movement.MovementMode;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 import org.slf4j.Logger;

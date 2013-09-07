@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.terasology.logic.characters;
+package org.terasology.logic.characters.movement;
 
 import org.terasology.physics.SweepCallback;
 import com.bulletphysics.linearmath.QuaternionUtil;
@@ -24,14 +24,16 @@ import org.slf4j.LoggerFactory;
 import org.terasology.entitySystem.EntityRef;
 import org.terasology.entitySystem.event.Event;
 import org.terasology.logic.characters.CharacterMoveInputEvent;
-import org.terasology.logic.characters.CharacterMovementComponent;
-import org.terasology.logic.characters.CharacterMover;
+import org.terasology.logic.characters.CharacterMoveInputEvent;
+import org.terasology.logic.characters.movement.CharacterMovementComponent;
+import org.terasology.logic.characters.movement.CharacterMover;
 import org.terasology.logic.characters.CharacterStateEvent;
-import org.terasology.logic.characters.MovementMode;
-import static org.terasology.logic.characters.MovementMode.CLIMBING;
-import static org.terasology.logic.characters.MovementMode.GHOSTING;
-import static org.terasology.logic.characters.MovementMode.SWIMMING;
-import static org.terasology.logic.characters.MovementMode.WALKING;
+import org.terasology.logic.characters.CharacterStateEvent;
+import org.terasology.logic.characters.movement.MovementMode;
+import static org.terasology.logic.characters.movement.MovementMode.CLIMBING;
+import static org.terasology.logic.characters.movement.MovementMode.GHOSTING;
+import static org.terasology.logic.characters.movement.MovementMode.SWIMMING;
+import static org.terasology.logic.characters.movement.MovementMode.WALKING;
 import org.terasology.logic.characters.events.FootstepEvent;
 import org.terasology.logic.characters.events.HorizontalCollisionEvent;
 import org.terasology.logic.characters.events.JumpEvent;
@@ -185,81 +187,6 @@ public class KinematicCharacterMover implements CharacterMover {
             }
         }
         return direction;
-    }
-    
-    private void climb(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
-            CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f initialVelocity = new Vector3f(state.getVelocity());
-        setVelocity(movementComp, state, input, entity);
-        Vector3f endVelocity = state.getVelocity();
-        
-        Vector3f position = state.getPosition();
-        Vector3f moveDelta = new Vector3f(endVelocity);
-        moveDelta.scale(input.getDelta());
-        float stepHeight = movementComp.getStepHeight(state.isGrounded());
-        float slopeFactor = movementComp.getSlopeFactor();
-        CharacterCollider collider = physics.getCharacterCollider(entity);
-        
-        MoveResult moveResult = move(position, moveDelta, stepHeight, slopeFactor, collider);
-        Vector3f distanceMoved = new Vector3f(moveResult.getFinalPosition());
-        distanceMoved.sub(state.getPosition());
-        state.getPosition().set(moveResult.getFinalPosition());
-        
-        
-        if (moveResult.isBottomHit()) {
-            //Send VerticalCollisionEvent
-            if (!state.isGrounded()) {
-                if (input.isFirstRun()) {
-                    Vector3f landVelocity = new Vector3f(initialVelocity);
-                    landVelocity.y += (distanceMoved.y / moveDelta.y) * (endVelocity.y - initialVelocity.y);
-                    logger.debug("Landed at " + landVelocity);
-                    entity.send(new VerticalCollisionEvent(state.getPosition(), landVelocity));
-                }
-                state.setGrounded(true);
-            }
-            endVelocity.y = 0;
-            // Jumping is only possible, if the entity is standing on ground
-            if (input.isJumpRequested()) {
-                state.setGrounded(false);
-                endVelocity.y += movementComp.jumpSpeed;
-                if (input.isFirstRun()) {
-                    entity.send(new JumpEvent());
-                }
-            }
-        } else {
-            //Apply head bumping feedback
-            if (moveResult.isTopHit() && endVelocity.y > 0) {
-                endVelocity.y = getVerticalCollisionFeedbackFactor(state.getMode()) * endVelocity.y;
-            }
-            state.setGrounded(false);
-        }
-        
-        
-        //Check footsteps and send movement event
-        if (input.isFirstRun() && distanceMoved.length() > 0) {
-            entity.send(new MovedEvent(distanceMoved, state.getPosition()));
-        
-            if (shouldSetFootStepDelta(state.getMode(), state.isGrounded())) {
-                state.setFootstepDelta(
-                        state.getFootstepDelta() + distanceMoved.length() / movementComp.distanceBetweenSwimStrokes);
-                if (state.getFootstepDelta() > 1) {
-                    state.setFootstepDelta(state.getFootstepDelta() - 1);
-                    if (input.isFirstRun()) {
-                        Event footStepEvent = getFootStepEvent(state.getMode(), state);
-                        if(footStepEvent != null) {
-                            entity.send(footStepEvent);
-                        }
-                    }
-                }
-            }
-        }
-        
-        if (input.isFirstRun() && moveResult.isHorizontalHit()) {
-            Event event = getHorrizontalCollisionEvent(state.getMode(), state);
-            if(event != null) {
-                entity.send(event);
-            }
-        }
     }
     
     private void ghost(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
@@ -520,79 +447,6 @@ public class KinematicCharacterMover implements CharacterMover {
         return result;
     }
 
-    private void swim(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
-            CharacterMoveInputEvent input, EntityRef entity) {
-        Vector3f initialVelocity = new Vector3f(state.getVelocity());
-        setVelocity(movementComp, state, input, entity);
-        Vector3f endVelocity = state.getVelocity();
-        
-        Vector3f position = state.getPosition();
-        Vector3f moveDelta = new Vector3f(endVelocity);
-        moveDelta.scale(input.getDelta());
-        float stepHeight = movementComp.getStepHeight(state.isGrounded());
-        float slopeFactor = movementComp.getSlopeFactor();
-        CharacterCollider collider = physics.getCharacterCollider(entity);
-        
-        MoveResult moveResult = move(position, moveDelta, stepHeight, slopeFactor, collider);
-        Vector3f distanceMoved = new Vector3f(moveResult.getFinalPosition());
-        distanceMoved.sub(state.getPosition());
-        state.getPosition().set(moveResult.getFinalPosition());
-        
-        if (moveResult.isBottomHit()) {
-            //Send VerticalCollisionEvent
-            if (!state.isGrounded()) {
-                if (input.isFirstRun()) {
-                    Vector3f landVelocity = new Vector3f(initialVelocity);
-                    landVelocity.y += (distanceMoved.y / moveDelta.y) * (endVelocity.y - initialVelocity.y);
-                    logger.debug("Landed at " + landVelocity);
-                    entity.send(new VerticalCollisionEvent(state.getPosition(), landVelocity));
-                }
-                state.setGrounded(true);
-            }
-            endVelocity.y = 0;
-            // Jumping is only possible, if the entity is standing on ground
-            if (input.isJumpRequested()) {
-                state.setGrounded(false);
-                endVelocity.y += movementComp.jumpSpeed;
-                if (input.isFirstRun()) {
-                    entity.send(new JumpEvent());
-                }
-            }
-        } else {
-            //Apply head bumping feedback
-            if (moveResult.isTopHit() && endVelocity.y > 0) {
-                endVelocity.y = getVerticalCollisionFeedbackFactor(state.getMode()) * endVelocity.y;
-            }
-            state.setGrounded(false);
-        }
-        
-        //Check footsteps and send movement event
-        if (input.isFirstRun() && distanceMoved.length() > 0) {
-            entity.send(new MovedEvent(distanceMoved, state.getPosition()));
-        
-            if (shouldSetFootStepDelta(state.getMode(), state.isGrounded())) {
-                state.setFootstepDelta(
-                        state.getFootstepDelta() + distanceMoved.length() / movementComp.distanceBetweenSwimStrokes);
-                if (state.getFootstepDelta() > 1) {
-                    state.setFootstepDelta(state.getFootstepDelta() - 1);
-                    if (input.isFirstRun()) {
-                        Event footStepEvent = getFootStepEvent(state.getMode(), state);
-                        if(footStepEvent != null) {
-                            entity.send(footStepEvent);
-                        }
-                    }
-                }
-            }
-        }
-        
-        if (input.isFirstRun() && moveResult.isHorizontalHit()) {
-            Event event = getHorrizontalCollisionEvent(state.getMode(), state);
-            if(event != null) {
-                entity.send(event);
-            }
-        }
-    }
-
     private void updatePosition(final CharacterMovementComponent movementComp, final CharacterStateEvent state,
             CharacterMoveInputEvent input, EntityRef entity) {
         switch (state.getMode()) {
@@ -600,13 +454,9 @@ public class KinematicCharacterMover implements CharacterMover {
                 ghost(movementComp, state, input, entity);
                 break;
             case SWIMMING:
-                swim(movementComp, state, input, entity);
-                break;
             case WALKING:
-                walk(movementComp, state, input, entity);
-                break;
             case CLIMBING:
-                climb(movementComp, state, input, entity);
+                walk(movementComp, state, input, entity);
                 break;
             default:
                 walk(movementComp, state, input, entity);

@@ -16,6 +16,8 @@
 
 package org.terasology.logic.characters;
 
+import org.terasology.logic.characters.movement.CharacterMovementComponent;
+import org.terasology.logic.characters.movement.MovementMode;
 import com.bulletphysics.linearmath.Transform;
 import org.terasology.entitySystem.EntityRef;
 import org.terasology.logic.location.LocationComponent;
