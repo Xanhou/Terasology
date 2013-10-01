@@ -39,7 +39,23 @@ public @interface ReceiveEvent {
      */
     Class<? extends Component>[] components() default {};
 
+    
+    /**
+     * The netFilter allows you to set when to register for events.
+     * The default is to always register. For the different options, see the 
+     * RegisterMode enum.
+     */
     RegisterMode netFilter() default RegisterMode.ALWAYS;
 
+    /**
+     * Sets the priority for receiving events.
+     * </p>
+     * While you can use integers numbers, it is common practice to use the
+     * EventPriority constants for this. The default is
+     * EventPriority.PRIORITY_NORMAL.
+     * </p>
+     * When using integer numbers, higher numbers mean higher priority, meaning
+     * you receive the event before systems with a lower priority value.
+     */
     int priority() default EventPriority.PRIORITY_NORMAL;
 }

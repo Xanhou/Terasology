@@ -84,7 +84,7 @@ public class KinematicCharacterMover implements CharacterMover {
      * The amount of extra distance added to vertical movement to allow for penetration.
      */
     private static final float VERTICAL_PENETRATION_LEEWAY = 0.05f;
-    //Logger is now based on implementing class:
+    
     private final Logger logger = LoggerFactory.getLogger(KinematicCharacterMover.class);
     private WorldProvider worldProvider;
     private PhysicsEngine physics;
@@ -434,15 +434,20 @@ public class KinematicCharacterMover implements CharacterMover {
         CharacterStateEvent result = new CharacterStateEvent(initial);
         result.setSequenceNumber(input.getSequenceNumber());
         //Prevent movement in unloaded chunks. Likely to happen when teleporting.
-        if (worldProvider.isBlockRelevant(initial.getPosition())) {
+        boolean canMove = worldProvider.isBlockRelevant(initial.getPosition());
+        if (canMove) {
             updatePosition(characterMovementComponent, result, input, entity);
-            checkMode(characterMovementComponent, result, initial, entity, input.isFirstRun());
         }
         //Rotation is allowed in unloaded chunks:
         result.setTime(initial.getTime() + input.getDeltaMs());
         updateRotation(characterMovementComponent, result, input);
         result.setPitch(input.getPitch());
         result.setYaw(input.getYaw());
+        
+        if(canMove) {
+            checkMode(characterMovementComponent, result, initial, entity, input.isFirstRun());
+        }
+        
         input.runComplete();
         return result;
     }
